@@ -142,26 +142,28 @@ const layout = "02/Jan/2006:15:04:05 -0700" // 01/02 03:04:05PM '06 -0700
 // parseCommon parses log of the form:
 // 66.1.2.3 - - [22/May/2018:15:52:57 -0600] "GET /book HTTP/1.1" 403 38
 func parseCommon(s string) (ll LogLine, err error) {
+	s = strings.Replace(s, " - ", " ", -1)
+	s = strings.Replace(s, " - ", " ", -1)
 	fields := strings.Fields(s)
 	ll.IP = fields[0]
-	dateString := fields[3] + " " + fields[4]
+	dateString := fields[1] + " " + fields[2]
 	ll.Time, err = time.Parse(layout, dateString[1:len(dateString)-1])
 	if err != nil {
-		ll.Time, err = time.Parse(strings.Fields(layout)[0], fields[3][1:])
+		ll.Time, err = time.Parse(strings.Fields(layout)[0], fields[1][1:])
 		if err != nil {
 			err = errors.Wrap(err, "could not get time")
 			return
 		}
 	}
-	ll.Method = fields[5][1:]
-	ll.Route = fields[6]
-	ll.HTTP = fields[7][:len(fields[7])-1]
-	ll.Status, err = strconv.Atoi(fields[8])
+	ll.Method = fields[3][1:]
+	ll.Route = fields[4]
+	ll.HTTP = fields[5][:len(fields[5])-1]
+	ll.Status, err = strconv.Atoi(fields[6])
 	if err != nil {
 		err = errors.Wrap(err, "could not get status")
 		return
 	}
-	ll.Size, err = strconv.Atoi(fields[9])
+	ll.Size, err = strconv.Atoi(fields[7])
 	if err != nil {
 		err = errors.Wrap(err, "could not get size")
 		return
