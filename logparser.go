@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"io"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -126,7 +127,8 @@ func (lp *LogParser) parseReader() (err error) {
 	for scanner.Scan() {
 		lp.logData[i], err = parseCommon(scanner.Text())
 		if err != nil {
-			return
+			log.Println("err:", err.Error())
+			continue
 		}
 		i++
 	}
