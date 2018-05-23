@@ -99,7 +99,9 @@ func (lp *LogParser) getStats() (err error) {
 		}
 	}
 	lp.TotalUniqueHits = len(uniqueIPs)
-	lp.UniqueHitsPerDay = lp.TotalUniqueHits / lp.NumberOfDays
+	if lp.NumberOfDays > 0 {
+		lp.UniqueHitsPerDay = lp.TotalUniqueHits / lp.NumberOfDays
+	}
 	lp.BandwidthLast24Hours = humanize.Bytes(uint64(lp.bandwidthLast24Hours))
 	lp.TotalUniqueSpiders = len(spiderIPs)
 	return
