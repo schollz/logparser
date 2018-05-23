@@ -145,8 +145,11 @@ func parseCommon(s string) (ll LogLine, err error) {
 	dateString := fields[3] + " " + fields[4]
 	ll.Time, err = time.Parse(layout, dateString[1:len(dateString)-1])
 	if err != nil {
-		err = errors.Wrap(err, "could not get time")
-		return
+		ll.Time, err = time.Parse(strings.Fields(layout)[0], fields[3][1:])
+		if err != nil {
+			err = errors.Wrap(err, "could not get time")
+			return
+		}
 	}
 	ll.Method = fields[5][1:]
 	ll.Route = fields[6]
