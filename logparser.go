@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"io"
-	"log"
 	"strconv"
 	"strings"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
+	"github.com/schollz/progressbar"
 )
 
 // LogParser will parse the logs
@@ -126,10 +126,12 @@ func (lp *LogParser) parseReader() (err error) {
 	lp.logData = make([]LogLine, lines)
 	scanner := bufio.NewScanner(&teeBuffer)
 	i := 0
+	bar := progressbar.NewOptions(lines, progressbar.OptionShowIts())
 	for scanner.Scan() {
+		bar.Add(1)
 		lp.logData[i], err = parseCommon(scanner.Text())
 		if err != nil {
-			log.Println("err:", err.Error())
+			// log.Println("err:", err.Error())
 			continue
 		}
 		i++
@@ -145,6 +147,10 @@ func parseCommon(s string) (ll LogLine, err error) {
 	s = strings.Replace(s, " - ", " ", -1)
 	s = strings.Replace(s, " - ", " ", -1)
 	fields := strings.Fields(s)
+	if len(fields) < 3 {
+		err = errors.New("not enough fields")
+		return
+	}
 	ll.IP = fields[0]
 	dateString := fields[1] + " " + fields[2]
 	ll.Time, err = time.Parse(layout, dateString[1:len(dateString)-1])
