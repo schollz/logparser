@@ -8,22 +8,26 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/cihub/seelog"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
-	"github.com/schollz/progressbar"
+	progressbar "github.com/schollz/progressbar/v2"
 )
 
 // LogParser will parse the logs
 type LogParser struct {
 	r                    io.Reader
 	logData              []LogLine
-	TotalUniqueHits      int    `json:"total_unique_hits"`
-	TotalUniqueSpiders   int    `json:"total_unique_spiders"`
-	NumberOfDays         int    `json:"num_days"`
-	UniqueHitsPerDay     int    `json:"unique_hits_per_day"`
-	BandwidthLast24Hours string `json:"bandwidth_last_24_hours"`
 	bandwidthLast24Hours int
-	Name                 string `json:"name,omitempty"`
+
+	// Public data
+	Name                 string         `json:"name,omitempty"`
+	TotalUniqueHits      int            `json:"total_unique_hits"`
+	TotalUniqueSpiders   int            `json:"total_unique_spiders"`
+	NumberOfDays         int            `json:"num_days"`
+	UniqueHitsPerDay     int            `json:"unique_hits_per_day"`
+	BandwidthLast24Hours string         `json:"bandwidth_last_24_hours"`
+	TotalHitsPerRoute    map[string]int `json:"total_hits_per_route"`
 }
 
 type LogLine struct {
@@ -48,6 +52,7 @@ func OptionName(name string) func(*LogParser) error {
 func New(r io.Reader, options ...func(*LogParser) error) (lp *LogParser, err error) {
 	lp = new(LogParser)
 	lp.r = r
+	lp.TotalHitsPerRoute = make(map[string]int)
 
 	for _, option := range options {
 		err = option(lp)
@@ -55,6 +60,8 @@ func New(r io.Reader, options ...func(*LogParser) error) (lp *LogParser, err err
 			return
 		}
 	}
+
+	setLogLevel("debug")
 	return
 }
 
@@ -78,6 +85,8 @@ func (lp *LogParser) getStats() (err error) {
 	lp.bandwidthLast24Hours = 0
 
 	// get total number of days
+	log.Debug(lp.logData[0])
+	log.Debug(lp.logData[len(lp.logData)-1])
 	lp.NumberOfDays = int(lp.logData[len(lp.logData)-1].Time.Sub(lp.logData[0].Time).Hours() / 24)
 	lastDay := lp.logData[len(lp.logData)-1].Time
 
@@ -126,16 +135,21 @@ func (lp *LogParser) parseReader() (err error) {
 	lp.logData = make([]LogLine, lines)
 	scanner := bufio.NewScanner(&teeBuffer)
 	i := 0
-	bar := progressbar.NewOptions(lines, progressbar.OptionShowIts())
+	bar := progressbar.NewOptions(lines, progressbar.OptionShowIts(), progressbar.OptionThrottle(100*time.Millisecond))
 	for scanner.Scan() {
 		bar.Add(1)
 		lp.logData[i], err = parseCommon(scanner.Text())
 		if err != nil {
-			// log.Println("err:", err.Error())
+			log.Debug(err.Error())
 			continue
 		}
+		if _, ok := lp.TotalHitsPerRoute[lp.logData[i].Route]; !ok {
+			lp.TotalHitsPerRoute[lp.logData[i].Route] = 0
+		}
+		lp.TotalHitsPerRoute[lp.logData[i].Route]++
 		i++
 	}
+	lp.logData = lp.logData[:i]
 	err = scanner.Err()
 	return
 }
@@ -174,5 +188,43 @@ func parseCommon(s string) (ll LogLine, err error) {
 		err = errors.Wrap(err, "could not get size")
 		return
 	}
+	return
+}
+
+// setLogLevel determines the log level
+func setLogLevel(level string) (err error) {
+
+	// https://en.wikipedia.org/wiki/ANSI_escape_code#3/4_bit
+	// https://github.com/cihub/seelog/wiki/Log-levels
+	appConfig := `
+	<seelog minlevel="` + level + `">
+	<outputs formatid="stdout">
+	<filter levels="debug,trace">
+		<console formatid="debug"/>
+	</filter>
+	<filter levels="info">
+		<console formatid="info"/>
+	</filter>
+	<filter levels="critical,error">
+		<console formatid="error"/>
+	</filter>
+	<filter levels="warn">
+		<console formatid="warn"/>
+	</filter>
+	</outputs>
+	<formats>
+		<format id="stdout"   format="%Date %Time [%LEVEL] %File %FuncShort:%Line %Msg %n" />
+		<format id="debug"   format="%Date %Time %EscM(37)[%LEVEL]%EscM(0) %File %FuncShort:%Line %Msg %n" />
+		<format id="info"    format="%Date %Time %EscM(36)[%LEVEL]%EscM(0) %File %FuncShort:%Line %Msg %n" />
+		<format id="warn"    format="%Date %Time %EscM(33)[%LEVEL]%EscM(0) %File %FuncShort:%Line %Msg %n" />
+		<format id="error"   format="%Date %Time %EscM(31)[%LEVEL]%EscM(0) %File %FuncShort:%Line %Msg %n" />
+	</formats>
+	</seelog>
+	`
+	logger, err := log.LoggerFromConfigAsBytes([]byte(appConfig))
+	if err != nil {
+		return
+	}
+	log.ReplaceLogger(logger)
 	return
 }
