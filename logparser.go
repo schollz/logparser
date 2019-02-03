@@ -123,6 +123,8 @@ func (lp *LogParser) parseReader() (err error) {
 	var teeBuffer bytes.Buffer
 	tee := io.TeeReader(lp.r, &teeBuffer)
 	scannerLines := bufio.NewScanner(tee)
+	buf := make([]byte, 0, 64*1024)
+	scannerLines.Buffer(buf, 1024*1024)
 	for scannerLines.Scan() {
 		lines++
 	}
@@ -134,6 +136,8 @@ func (lp *LogParser) parseReader() (err error) {
 	// parse lines
 	lp.logData = make([]LogLine, lines)
 	scanner := bufio.NewScanner(&teeBuffer)
+	buf = make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
 	i := 0
 	bar := progressbar.NewOptions(lines, progressbar.OptionShowIts(), progressbar.OptionThrottle(100*time.Millisecond))
 	for scanner.Scan() {
